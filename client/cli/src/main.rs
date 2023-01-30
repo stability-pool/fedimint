@@ -36,9 +36,10 @@ use mint_client::utils::{
 use mint_client::{module_decode_stubs, Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use stabilitypool::PoolConfigGenerator;
 use url::Url;
 
-mod stabilitypool;
+pub mod stabilitypoolcli;
 
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "snake_case"))]
@@ -130,7 +131,7 @@ enum CliOutput {
 
     Backup,
 
-    Pool(stabilitypool::PoolCliOutput),
+    Pool(stabilitypool::PoolOutput),
 }
 
 impl fmt::Display for CliOutput {
@@ -337,7 +338,7 @@ enum Command {
     WipeNotes,
 
     #[clap(subcommand)]
-    Pool(stabilitypool::PoolCommand),
+    Pool(stabilitypoolcli::PoolCommand),
 }
 
 trait ErrorHandler<T, E> {
@@ -398,6 +399,7 @@ async fn main() {
             DynClientModuleGen::from(WalletClientGen),
             DynClientModuleGen::from(MintClientGen),
             DynClientModuleGen::from(LightningClientGen),
+            DynClientModuleGen::from(PoolConfigGenerator),
         ]);
 
         let cli = Cli::parse();
