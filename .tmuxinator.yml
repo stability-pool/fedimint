@@ -15,9 +15,14 @@ pre_window:
 tmux_detached: false
 windows:
   - main:
+      layout: main-vertical
       panes:
         - user:
             - source scripts/tmux-user-shell.sh
+        - pool_state:
+            - source scripts/lib.sh
+            - sleep 10 # wait
+            - watch -n 1 "${FM_MINT_CLIENT} pool state"
   - federation:
       layout: 3ed7,272x74,0,0{119x74,0,0,54,152x74,120,0[152x17,120,0,55,152x17,120,18,56,152x17,120,36,57,152x20,120,54,58]}
       panes:
@@ -37,4 +42,7 @@ windows:
           - fg
         - federation:
           - run_dkg
+          - cp $FM_CFG_DIR/client.json $FM_CFG_DIR/seeker/client.json
+          - cp $FM_CFG_DIR/client.json $FM_CFG_DIR/provider_a/client.json
+          - cp $FM_CFG_DIR/client.json $FM_CFG_DIR/provider_b/client.json
           - start_federation &

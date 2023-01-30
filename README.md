@@ -4,6 +4,9 @@
   </a>
 </h1>
 
+## Stability Pool Demo Video
+[![Stability Pool Demo](https://img.youtube.com/vi/wchLZpLQwjg/0.jpg)](https://www.youtube.com/watch?v=wchLZpLQwjg)
+
 <p align="center">
     <img src="docs/logo.jpg">
 </p>

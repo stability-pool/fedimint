@@ -65,12 +65,25 @@ export FM_CLN_EXTENSION_LISTEN_ADDRESS="0.0.0.0:8177"
 export FM_GATEWAY_LIGHTNING_ADDR="http://localhost:8177"
 
 mkdir -p $FM_GATEWAY_DATA_DIR
+# Define our own clients
+mkdir $FM_CFG_DIR/seeker
+mkdir $FM_CFG_DIR/provider_a
+mkdir $FM_CFG_DIR/provider_b
 
 # Define clients
 export FM_LIGHTNING_CLI="lightning-cli --network regtest --lightning-dir=$FM_CLN_DIR"
 export FM_LNCLI="lncli -n regtest --lnddir=$FM_LND_DIR --rpcserver=localhost:11009"
 export FM_BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
 export FM_MINT_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR"
+
+export FM_S_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR/seeker"
+export FM_A_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR/provider_a"
+export FM_B_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR/provider_b"
+
+# export FM_MINT_CLIENT
+# export FM_S_CLIENT
+# export FM_P_CLIENT
+
 export FM_MINT_RPC_CLIENT="$FM_BIN_DIR/mint-rpc-client"
 export FM_GATEWAY_CLI="$FM_BIN_DIR/gateway-cli --rpcpassword=theresnosecondbest"
 export FM_DB_TOOL="$FM_BIN_DIR/dbtool"
