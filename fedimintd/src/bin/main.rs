@@ -12,6 +12,7 @@ use fedimint_server::FedimintServer;
 use fedimintd::ui::{run_ui, UiMessage};
 use fedimintd::*;
 use futures::FutureExt;
+use stabilitypool::PoolConfigGenerator;
 use tokio::select;
 use tracing::{debug, error, info, warn};
 

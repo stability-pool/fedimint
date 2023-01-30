@@ -21,6 +21,7 @@ use hbbft::NetworkInfo;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use stabilitypool::PoolConfigGenParams;
 use tokio_rustls::rustls;
 use tracing::{error, info};
 use url::Url;

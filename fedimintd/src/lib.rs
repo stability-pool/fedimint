@@ -5,6 +5,7 @@ use fedimint_core::{Amount, Tiered};
 use fedimint_ln::LightningGen;
 use fedimint_mint::{MintGen, MintGenParams};
 use fedimint_wallet::{WalletGen, WalletGenParams};
+use stabilitypool::{PoolConfigGenParams, PoolConfigGenerator};
 
 pub mod ui;
 
@@ -30,6 +31,7 @@ pub fn configure_modules(
                 .cloned()
                 .collect(),
         })
+        .attach(PoolConfigGenParams::default())
 }
 
 pub fn module_registry() -> ModuleGenRegistry {
@@ -37,5 +39,6 @@ pub fn module_registry() -> ModuleGenRegistry {
         DynModuleGen::from(WalletGen),
         DynModuleGen::from(MintGen),
         DynModuleGen::from(LightningGen),
+        DynModuleGen::from(PoolConfigGenerator),
     ])
 }

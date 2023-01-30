@@ -28,6 +28,7 @@ futures = "0.3.24"
 impl-tools = "0.6.1"
 itertools = "0.10.5"
 fedimint-core = { path = "../fedimint-core" }
+stabilitypool = { path = "../modules/stabilitypool" }
 rand = "0.8"
 rayon = "1.6.1"
 rcgen = "=0.10.0"

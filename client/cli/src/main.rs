@@ -40,6 +40,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing_subscriber::EnvFilter;
 
+mod stabilitypool;
+
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "snake_case"))]
 #[serde(untagged)]
@@ -124,6 +126,8 @@ enum CliOutput {
     },
 
     Backup,
+
+    Pool(stabilitypool::PoolCliOutput),
 }
 
 impl fmt::Display for CliOutput {
@@ -317,6 +321,9 @@ enum Command {
     /// Wipe the notes data from the DB. Useful for testing backup & restore
     #[clap(hide = true)]
     WipeNotes,
+
+    #[clap(subcommand)]
+    Pool(stabilitypool::PoolCommand),
 }
 
 trait ErrorHandler<T, E> {
@@ -724,5 +731,8 @@ async fn handle_command(
                 Some(e.into()),
             )),
         },
+        Command::Pool(cmd) => stabilitypool::handle_command(cmd, client, rng)
+            .await
+            .map(CliOutput::Pool),
     }
 }

@@ -10,6 +10,7 @@ use fedimint_core::Amount;
 use fedimint_server::config::io::{create_cert, run_dkg, write_server_config, SALT_FILE};
 use fedimint_server::logging::TracingSetup;
 use fedimintd::*;
+use stabilitypool::PoolConfigGenerator;
 use tracing::info;
 use url::Url;
 
