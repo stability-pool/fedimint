@@ -1,39 +1,18 @@
-use std::io;
+use fedimint_core::module::ModuleCommon;
+use fedimint_core::plugin_types_trait_impl_common;
 
-use fedimint_core::core::Decoder;
-use fedimint_core::encoding::{Decodable, DecodeError};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use crate::{ModuleInstanceId, PoolConsensusItem, PoolInput, PoolOutput, PoolOutputOutcome};
 
-use crate::{PoolConsensusItem, PoolInput, PoolOutput, PoolOutputOutcome};
+// #[derive(Debug, Default, Clone)]
+// pub struct PoolDecoder;
 
-#[derive(Debug, Default, Clone)]
-pub struct PoolDecoder;
+pub struct StabilityPoolModuleTypes;
 
-impl Decoder for PoolDecoder {
+impl ModuleCommon for StabilityPoolModuleTypes {
     type Input = PoolInput;
     type Output = PoolOutput;
     type OutputOutcome = PoolOutputOutcome;
     type ConsensusItem = PoolConsensusItem;
-
-    fn decode_input(&self, mut d: &mut dyn io::Read) -> Result<PoolInput, DecodeError> {
-        PoolInput::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
-    }
-
-    fn decode_output(&self, mut d: &mut dyn io::Read) -> Result<PoolOutput, DecodeError> {
-        PoolOutput::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
-    }
-
-    fn decode_output_outcome(
-        &self,
-        mut d: &mut dyn io::Read,
-    ) -> Result<PoolOutputOutcome, DecodeError> {
-        PoolOutputOutcome::consensus_decode(&mut d, &ModuleDecoderRegistry::default())
-    }
-
-    fn decode_consensus_item(
-        &self,
-        mut r: &mut dyn io::Read,
-    ) -> Result<PoolConsensusItem, DecodeError> {
-        PoolConsensusItem::consensus_decode(&mut r, &ModuleDecoderRegistry::default())
-    }
 }
+
+plugin_types_trait_impl_common!(PoolInput, PoolOutput, PoolOutputOutcome, PoolConsensusItem);

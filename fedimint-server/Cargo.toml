@@ -26,6 +26,7 @@ impl-tools = "0.8.0"
 itertools = "0.10.5"
 fedimint-core = { path = "../fedimint-core" }
 fedimint-logging = { path = "../fedimint-logging" }
+stabilitypool = { path = "../modules/stabilitypool" }
 rand = "0.8"
 rayon = "1.6.1"
 rcgen = "=0.10.0"

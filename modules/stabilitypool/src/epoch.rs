@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use bitcoin::XOnlyPublicKey;
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::PeerId;
 use futures::StreamExt;
@@ -42,7 +43,7 @@ pub struct EpochState {
 }
 
 impl EpochState {
-    pub async fn from_db(dbtx: &mut DatabaseTransaction<'_>) -> Self {
+    pub async fn from_db(dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>) -> Self {
         Self {
             latest_ended: db::get(dbtx, &db::LastEpochEndedKey).await,
             latest_settled: db::get(dbtx, &db::LastEpochSettledKey).await,
@@ -89,7 +90,7 @@ impl EpochState {
 }
 
 pub async fn can_propose(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     backoff: &BackOff,
     config: &EpochConfig,
 ) -> bool {
@@ -110,7 +111,7 @@ pub async fn can_propose(
 }
 
 pub async fn consensus_proposal(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     backoff: &BackOff,
     config: &EpochConfig,
     oracle: &dyn OracleClient,
@@ -166,7 +167,7 @@ pub async fn consensus_proposal(
 }
 
 pub async fn process_consensus_item(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     config: &EpochConfig,
     peer_id: PeerId,
     epoch_end: EpochEnd,
@@ -224,7 +225,7 @@ pub async fn process_consensus_item(
         let count = dbtx
             .find_by_prefix(&db::EpochEndKeyPrefix)
             .await
-            .map(|res| res.expect("db error").1)
+            .map(|res| res.1)
             .collect::<Vec<_>>()
             .await
             .into_iter()
@@ -242,7 +243,6 @@ pub async fn process_consensus_item(
     let price_tally = dbtx
         .find_by_prefix(&db::EpochEndKeyPrefix)
         .await
-        .map(Result::unwrap)
         .collect::<Vec<_>>()
         .await
         .into_iter()
@@ -283,7 +283,6 @@ pub async fn process_consensus_item(
         let current_balances = dbtx
             .find_by_prefix(&db::AccountBalanceKeyPrefix)
             .await
-            .map(|r| r.expect("DB error"))
             .map(|(k, v)| (k.0, v.unlocked.msats))
             .collect::<BTreeMap<_, _>>()
             .await;
@@ -292,7 +291,6 @@ pub async fn process_consensus_item(
         let mut provider_actions = Vec::<Action<ProviderBid>>::new();
         dbtx.find_by_prefix(&db::ActionStagedKeyPrefix)
             .await
-            .map(|r| r.expect("DB error"))
             .collect::<Vec<_>>()
             .await
             .into_iter()
@@ -379,7 +377,7 @@ pub async fn process_consensus_item(
 /// unlocked balance We need to store the Seekers' unlocked balance for them to
 /// relock in the next epoch.
 async fn settle_locked_balances(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     epoch_id: u64,
     epoch_outcome: EpochOutcome,
 ) -> BTreeMap<XOnlyPublicKey, u64> {
@@ -411,8 +409,7 @@ async fn settle_locked_balances(
     // balance
     dbtx.find_by_prefix(&db::AccountBalanceKeyPrefix)
         .await
-        .map(|res| {
-            let (key, account) = res.expect("DB error");
+        .map(|(key, account)| {
             let account_id = key.0;
             if account.locked.amount().msats > 0 {
                 match account.locked {

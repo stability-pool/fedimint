@@ -19,7 +19,7 @@ pub mod legacy {
     use bitcoin_hashes::Hash;
     use fedimint_core::core::{
         DynInput, DynOutput, LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-        LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+        LEGACY_HARDCODED_INSTANCE_ID_POOL, LEGACY_HARDCODED_INSTANCE_ID_WALLET,
     };
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::ModuleCommon;
@@ -57,6 +57,7 @@ pub mod legacy {
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Input {
         // TODO: maybe treat every note as a seperate input?
+        Pool(stabilitypool::PoolInput),
         Mint(<fedimint_mint_client::MintModuleTypes as ModuleCommon>::Input),
         Wallet(<fedimint_wallet_client::WalletModuleTypes as ModuleCommon>::Input),
         LN(<fedimint_ln_client::LightningModuleTypes as ModuleCommon>::Input),
@@ -66,6 +67,7 @@ pub mod legacy {
     #[allow(clippy::large_enum_variant)]
     #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
     pub enum Output {
+        Pool(stabilitypool::PoolOutput),
         Mint(<fedimint_mint_client::MintModuleTypes as ModuleCommon>::Output),
         Wallet(<fedimint_wallet_client::WalletModuleTypes as ModuleCommon>::Output),
         LN(<fedimint_ln_client::LightningModuleTypes as ModuleCommon>::Output),
@@ -91,6 +93,7 @@ pub mod legacy {
                         DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, i)
                     }
                     Input::LN(i) => DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, i),
+                    Input::Pool(i) => DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_POOL, i),
                 })
                 .collect::<Vec<DynInput>>();
             let erased_outputs = outputs
@@ -101,6 +104,7 @@ pub mod legacy {
                         DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET, o)
                     }
                     Output::LN(o) => DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, o),
+                    Output::Pool(o) => DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_POOL, o),
                 })
                 .collect::<Vec<DynOutput>>();
 
@@ -163,6 +167,9 @@ pub mod legacy {
                         Input::LN(input) => {
                             DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, input)
                         }
+                        Input::Pool(input) => {
+                            DynInput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_POOL, input)
+                        }
                     })
                     .collect(),
                 outputs: self
@@ -177,6 +184,9 @@ pub mod legacy {
                         }
                         Output::LN(output) => {
                             DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_LN, output)
+                        }
+                        Output::Pool(output) => {
+                            DynOutput::from_typed(LEGACY_HARDCODED_INSTANCE_ID_POOL, output)
                         }
                     })
                     .collect(),
@@ -312,6 +322,7 @@ impl TransactionBuilder {
         C: AsRef<ClientConfig> + Clone + Send,
     {
         self.tx.inputs.iter().map(|i| match i {
+            Input::Pool(input) => client.pool_client().input_amount(input),
             Input::Mint(input) => client.mint_client().input_amount(input),
             Input::Wallet(input) => client.wallet_client().input_amount(input),
             Input::LN(input) => client.ln_client().input_amount(input),
@@ -326,6 +337,7 @@ impl TransactionBuilder {
         C: AsRef<ClientConfig> + Clone + Send + 'a,
     {
         self.tx.outputs.iter().map(|o| match o {
+            Output::Pool(output) => client.pool_client().output_amount(output),
             Output::Mint(output) => client.mint_client().output_amount(output),
             Output::Wallet(output) => client.wallet_client().output_amount(output),
             Output::LN(output) => client.ln_client().output_amount(output),

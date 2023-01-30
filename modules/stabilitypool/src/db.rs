@@ -1,8 +1,9 @@
 use std::fmt::Debug;
 
-use fedimint_core::db::{DatabaseKey, DatabaseRecord, DatabaseTransaction};
+use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::db::{DatabaseKey, DatabaseRecord, ModuleDatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::impl_db_prefix_const;
+use fedimint_core::{impl_db_lookup, impl_db_record};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -60,10 +61,13 @@ pub struct AccountBalanceKey(pub secp256k1_zkp::XOnlyPublicKey);
 )]
 pub struct AccountBalanceKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = AccountBalanceKey,
     value = AccountBalance,
     db_prefix = DbKeyPrefix::Account,
+);
+impl_db_lookup!(
+    key = AccountBalanceKey,
     query_prefix = AccountBalanceKeyPrefix
 );
 
@@ -75,12 +79,12 @@ pub struct DepositOutcomeKey(pub fedimint_core::OutPoint);
 )]
 pub struct DepositOutcomePrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = DepositOutcomeKey,
     value = secp256k1_zkp::XOnlyPublicKey,
     db_prefix = DbKeyPrefix::DepositOutcome,
-    query_prefix = DepositOutcomePrefix
 );
+impl_db_lookup!(key = DepositOutcomeKey, query_prefix = DepositOutcomePrefix);
 
 #[derive(
     Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd,
@@ -90,12 +94,12 @@ pub struct EpochOutcomeKey(pub u64);
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct EpochOutcomeKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = EpochOutcomeKey,
     value = EpochOutcome,
     db_prefix = DbKeyPrefix::EpochOutcome,
-    query_prefix = EpochOutcomeKeyPrefix
 );
+impl_db_lookup!(key = EpochOutcomeKey, query_prefix = EpochOutcomeKeyPrefix);
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct LastEpochSettledKey;
@@ -105,10 +109,13 @@ pub struct LastEpochSettledKey;
 )]
 pub struct LastEpochSettledPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = LastEpochSettledKey,
     value = u64,
     db_prefix = DbKeyPrefix::LastEpochSettled,
+);
+impl_db_lookup!(
+    key = LastEpochSettledKey,
     query_prefix = LastEpochSettledPrefix
 );
 
@@ -120,12 +127,12 @@ pub struct LastEpochEndedKey;
 )]
 pub struct LastEpochEndedPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = LastEpochEndedKey,
     value = u64,
     db_prefix = DbKeyPrefix::LastEpochEnded,
-    query_prefix = LastEpochEndedPrefix
 );
+impl_db_lookup!(key = LastEpochEndedKey, query_prefix = LastEpochEndedPrefix);
 
 #[derive(
     Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd,
@@ -137,12 +144,12 @@ pub struct EpochEndKey(pub fedimint_core::PeerId);
 )]
 pub struct EpochEndKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = EpochEndKey,
     value = EpochEnd,
     db_prefix = DbKeyPrefix::EpochEnd,
-    query_prefix = EpochEndKeyPrefix,
 );
+impl_db_lookup!(key = EpochEndKey, query_prefix = EpochEndKeyPrefix,);
 
 #[derive(
     Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd,
@@ -154,44 +161,56 @@ pub struct ActionStagedKey(pub secp256k1_zkp::XOnlyPublicKey);
 )]
 pub struct ActionStagedKeyPrefix;
 
-impl_db_prefix_const!(
+impl_db_record!(
     key = ActionStagedKey,
     value = ActionStaged,
     db_prefix = DbKeyPrefix::ActionStaged,
-    query_prefix = ActionStagedKeyPrefix
 );
+impl_db_lookup!(key = ActionStagedKey, query_prefix = ActionStagedKeyPrefix);
 
-pub async fn get<K>(dbtx: &mut DatabaseTransaction<'_>, key: &K) -> Option<K::Value>
+pub async fn get<K>(
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+    key: &K,
+) -> Option<K::Value>
 where
     K: DatabaseKey + DatabaseRecord,
 {
-    dbtx.get_value(key).await.expect("db error")
+    dbtx.get_value(key).await
 }
 
-pub async fn set<K, V>(dbtx: &mut DatabaseTransaction<'_>, key: &K, value: &V) -> Option<V>
+pub async fn set<K, V>(
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+    key: &K,
+    value: &V,
+) -> Option<V>
 where
     K: Encodable + Decodable + Debug + DatabaseRecord<Value = V>,
 {
-    dbtx.insert_entry(key, value).await.expect("db error")
+    dbtx.insert_entry(key, value).await
 }
 
-pub async fn pop<K, V>(dbtx: &mut DatabaseTransaction<'_>, key: &K) -> Option<V>
+pub async fn pop<K, V>(
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+    key: &K,
+) -> Option<V>
 where
     K: Encodable + Decodable + Debug + DatabaseRecord<Value = V>,
 {
-    dbtx.remove_entry(key).await.expect("db error")
+    dbtx.remove_entry(key).await
 }
 
-pub async fn prefix_remove_all<'a, P>(dbtx: &mut DatabaseTransaction<'_>, key_prefix: &'a P)
-where
+pub async fn prefix_remove_all<'a, P>(
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+    key_prefix: &'a P,
+) where
     P: Encodable + Debug + DatabaseRecord + Decodable,
 {
-    dbtx.remove_by_prefix(key_prefix).await.expect("db error")
+    dbtx.remove_by_prefix(key_prefix).await
 }
 
 // BROKEN!
 pub async fn prefix_values<'a, KP: 'a>(
-    dbtx: &'a mut DatabaseTransaction<'_>,
+    dbtx: &'a mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     key_prefix: &'a KP,
 ) -> impl Iterator<Item = KP::Value> + 'a
 where
@@ -199,7 +218,7 @@ where
 {
     dbtx.find_by_prefix(key_prefix)
         .await
-        .map(|res| res.expect("db error").1)
+        .map(|res| res.1)
         .collect::<Vec<_>>()
         .await
         .into_iter()

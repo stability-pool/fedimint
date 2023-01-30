@@ -3,6 +3,7 @@ use fedimint_core::config::ConfigGenParams;
 use fedimint_core::{Amount, Tiered};
 use fedimint_mint_server::MintGenParams;
 use fedimint_wallet_server::WalletGenParams;
+use stabilitypool::PoolConfigGenParams;
 
 mod ui;
 
@@ -30,4 +31,5 @@ pub fn configure_modules(
                 .cloned()
                 .collect(),
         })
+        .attach(PoolConfigGenParams::default())
 }

@@ -3,8 +3,9 @@ use std::fmt;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use fedimint_core::core::{Decoder, ModuleKind};
-use fedimint_core::db::DatabaseTransaction;
+use common::StabilityPoolModuleTypes;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::interconnect::ModuleInterconect;
@@ -12,12 +13,11 @@ use fedimint_core::module::{
     ApiEndpoint, ApiVersion, ConsensusProposal, InputMeta, IntoModuleError, ModuleConsensusVersion,
     ModuleError, TransactionItemAmount,
 };
-use fedimint_core::{plugin_types_trait_impl, OutPoint, PeerId, ServerModule};
+use fedimint_core::{OutPoint, PeerId, ServerModule};
 use serde::{Deserialize, Serialize};
 
 pub use crate::account::*;
 pub use crate::action::*;
-use crate::common::PoolDecoder;
 use crate::config::{EpochConfig, PoolConfig};
 pub use crate::config_gen::*;
 use crate::db::AccountBalanceKeyPrefix;
@@ -47,6 +47,8 @@ pub struct StabilityPool {
 
 #[derive(Debug, Clone)]
 pub struct PoolVerificationCache;
+
+impl fedimint_core::server::VerificationCache for PoolVerificationCache {}
 
 pub type PoolInput = AccountWithdrawal;
 pub type PoolOutput = AccountDeposit;
@@ -116,7 +118,7 @@ impl StabilityPool {
 #[async_trait]
 impl ServerModule for StabilityPool {
     type Gen = config_gen::PoolConfigGenerator;
-    type Decoder = PoolDecoder;
+    type Common = StabilityPoolModuleTypes;
     type VerificationCache = PoolVerificationCache;
 
     fn versions(&self) -> (ModuleConsensusVersion, &[ApiVersion]) {
@@ -126,11 +128,10 @@ impl ServerModule for StabilityPool {
         )
     }
 
-    fn decoder(&self) -> Self::Decoder {
-        PoolDecoder
-    }
-
-    async fn await_consensus_proposal(&self, dbtx: &mut DatabaseTransaction<'_>) {
+    async fn await_consensus_proposal(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+    ) {
         // This method is `select_all`ed on across all modules.
         // We block until at least one of these happens:
         // * At least one proposed action is avaliable
@@ -152,7 +153,7 @@ impl ServerModule for StabilityPool {
 
     async fn consensus_proposal(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     ) -> ConsensusProposal<PoolConsensusItem> {
         let mut items = Vec::new();
 
@@ -166,7 +167,7 @@ impl ServerModule for StabilityPool {
 
     async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         consensus_items: Vec<(PeerId, PoolConsensusItem)>,
     ) {
         for (peer_id, item) in consensus_items {
@@ -204,14 +205,13 @@ impl ServerModule for StabilityPool {
     async fn validate_input<'a, 'b>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         _verification_cache: &Self::VerificationCache,
         withdrawal: &'a PoolInput,
     ) -> Result<InputMeta, ModuleError> {
         let avaliable = dbtx
             .get_value(&db::AccountBalanceKey(withdrawal.account))
             .await
-            .expect("db error")
             .map(|acc| acc.unlocked)
             .unwrap_or(fedimint_core::Amount::ZERO);
 
@@ -239,7 +239,7 @@ impl ServerModule for StabilityPool {
     async fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut DatabaseTransaction<'c>,
+        dbtx: &mut ModuleDatabaseTransaction<'c, ModuleInstanceId>,
         withdrawal: &'b PoolInput,
         verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, ModuleError> {
@@ -252,7 +252,6 @@ impl ServerModule for StabilityPool {
         let mut account = dbtx
             .get_value(&db::AccountBalanceKey(withdrawal.account))
             .await
-            .expect("db error")
             .unwrap_or_default();
 
         account.unlocked.msats = account
@@ -262,15 +261,14 @@ impl ServerModule for StabilityPool {
             .expect("withdrawal amount should already be checked");
 
         dbtx.insert_entry(&db::AccountBalanceKey(withdrawal.account), &account)
-            .await
-            .expect("db error");
+            .await;
 
         Ok(meta)
     }
 
     async fn validate_output(
         &self,
-        dbtx: &mut DatabaseTransaction,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         deposit: &PoolOutput,
     ) -> Result<TransactionItemAmount, ModuleError> {
         // TODO: Maybe some checks into minimum deposit amount?
@@ -279,7 +277,6 @@ impl ServerModule for StabilityPool {
         if let Some(account) = dbtx
             .get_value(&db::AccountBalanceKey(deposit.account))
             .await
-            .expect("db error")
         {
             if !account.can_add_amount(deposit.amount) {
                 return Err(StabilityPoolError::DepositTooLarge).into_module_error_other();
@@ -295,7 +292,7 @@ impl ServerModule for StabilityPool {
 
     async fn apply_output<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
         deposit: &'a PoolOutput,
         outpoint: OutPoint,
     ) -> Result<TransactionItemAmount, ModuleError> {
@@ -304,7 +301,6 @@ impl ServerModule for StabilityPool {
         let mut account = dbtx
             .get_value(&db::AccountBalanceKey(deposit.account))
             .await
-            .expect("db error")
             .unwrap_or_default();
         account.unlocked.msats = account
             .unlocked
@@ -313,12 +309,10 @@ impl ServerModule for StabilityPool {
             .expect("already checked overflow");
 
         dbtx.insert_entry(&db::AccountBalanceKey(deposit.account), &account)
-            .await
-            .expect("db error");
+            .await;
 
         dbtx.insert_new_entry(&db::DepositOutcomeKey(outpoint), &deposit.account)
-            .await
-            .expect("db error");
+            .await;
 
         Ok(txo_amount)
     }
@@ -326,23 +320,26 @@ impl ServerModule for StabilityPool {
     async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         _consensus_peers: &HashSet<PeerId>,
-        _dbtx: &mut DatabaseTransaction<'b>,
+        _dbtx: &mut ModuleDatabaseTransaction<'b, ModuleInstanceId>,
     ) -> Vec<PeerId> {
         vec![]
     }
 
     async fn output_status(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         outpoint: OutPoint,
-    ) -> Option<<Self::Decoder as Decoder>::OutputOutcome> {
+    ) -> Option<PoolOutputOutcome> {
         dbtx.get_value(&db::DepositOutcomeKey(outpoint))
             .await
-            .expect("db error")
             .map(PoolOutputOutcome)
     }
 
-    async fn audit(&self, dbtx: &mut DatabaseTransaction<'_>, audit: &mut Audit) {
+    async fn audit(
+        &self,
+        dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
+        audit: &mut Audit,
+    ) {
         audit
             .add_items(dbtx, &AccountBalanceKeyPrefix, |_, v| {
                 ((v.unlocked + v.locked.amount()).msats) as i64
@@ -367,16 +364,6 @@ impl StabilityPool {
         }
     }
 }
-
-// TODO: What does this do?
-plugin_types_trait_impl!(
-    this_expr::does_not::do_anything::MODULE_KEY_POOL,
-    PoolInput,
-    PoolOutput,
-    PoolOutputOutcome,
-    PoolConsensusItem,
-    PoolVerificationCache
-);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum StabilityPoolError {

@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::module::{api_endpoint, ApiEndpoint, ApiError};
 use futures::StreamExt;
 
@@ -60,7 +61,7 @@ pub fn endpoints() -> Vec<ApiEndpoint<StabilityPool>> {
 }
 
 pub async fn epoch_outcome(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     epoch_id: u64,
 ) -> Result<EpochOutcome, ApiError> {
     db::get(dbtx, &db::EpochOutcomeKey(epoch_id))
@@ -93,7 +94,7 @@ pub enum SideResponse {
 }
 
 pub async fn account(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     account_id: secp256k1_zkp::XOnlyPublicKey,
 ) -> BalanceResponse {
     let epoch_state = EpochState::from_db(dbtx).await;
@@ -155,7 +156,7 @@ pub async fn account(
 }
 
 pub async fn propose_action(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     proposed_db: &ActionProposedDb,
     request: ActionProposed,
 ) -> Result<(), ApiError> {
@@ -206,7 +207,7 @@ pub struct StateEpoch {
     pub outcome: Option<EpochOutcome>,
 }
 
-pub async fn state(dbtx: &mut DatabaseTransaction<'_>) -> State {
+pub async fn state(dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>) -> State {
     let epoch_state = EpochState::from_db(dbtx).await;
 
     let previous_epoch_id = epoch_state.latest_ended.unwrap_or(0);
@@ -219,10 +220,7 @@ pub async fn state(dbtx: &mut DatabaseTransaction<'_>) -> State {
     let accounts: BTreeMap<bitcoin::XOnlyPublicKey, AccountBalance> = dbtx
         .find_by_prefix(&db::AccountBalanceKeyPrefix)
         .await
-        .map(|res| {
-            let (key, value) = res.unwrap();
-            (key.0, value)
-        })
+        .map(|(key, value)| (key.0, value))
         .collect::<BTreeMap<_, _>>()
         .await;
     // .await
@@ -233,7 +231,6 @@ pub async fn state(dbtx: &mut DatabaseTransaction<'_>) -> State {
     let staged = dbtx
         .find_by_prefix(&db::ActionStagedKeyPrefix)
         .await
-        .map(|r| r.expect("DB error"))
         .map(|(_, action)| (action.account_id(), action))
         .collect::<BTreeMap<_, _>>()
         .await;

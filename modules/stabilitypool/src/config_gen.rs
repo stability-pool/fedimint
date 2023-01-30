@@ -2,25 +2,24 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 
 use async_trait::async_trait;
-use fedimint_core::cancellable::Cancellable;
 use fedimint_core::config::{
-    ConfigGenParams, DkgPeerMsg, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
+    ConfigGenParams, DkgResult, ModuleConfigResponse, ModuleGenParams, ServerModuleConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
+use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
+use fedimint_core::db::{Database, DatabaseVersion, ModuleDatabaseTransaction};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::module::ModuleGen;
 use fedimint_core::module::__reexports::serde_json;
-use fedimint_core::net::peers::MuxPeerConnections;
+use fedimint_core::module::{
+    CommonModuleGen, CoreConsensusVersion, ExtendsCommonModuleGen, ModuleCommon,
+    ModuleConsensusVersion, PeerHandle, ServerModuleGen,
+};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{NumPeers, PeerId};
-use fedimint_core::module::CoreConsensusVersion;
-use fedimint_core::module::ModuleConsensusVersion;
 use serde::{Deserialize, Serialize};
 
-use crate::common::PoolDecoder;
+use crate::common::StabilityPoolModuleTypes;
 use crate::config::{
     EpochConfig, OracleConfig, PoolConfig, PoolConfigClient, PoolConfigConsensus, PoolConfigPrivate,
 };
@@ -64,18 +63,34 @@ impl Default for PoolConfigGenParams {
     }
 }
 
-#[derive(Debug)]
-pub struct PoolConfigGenerator;
+#[derive(Debug, Clone)]
+pub struct PoolCommonGen;
 
 #[async_trait]
-impl ModuleGen for PoolConfigGenerator {
+impl CommonModuleGen for PoolCommonGen {
     const KIND: ModuleKind = KIND;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
-    type Decoder = PoolDecoder;
 
-    fn decoder(&self) -> PoolDecoder {
-        PoolDecoder
+    fn decoder() -> Decoder {
+        StabilityPoolModuleTypes::decoder()
     }
+
+    fn hash_client_module(
+        config: serde_json::Value,
+    ) -> anyhow::Result<bitcoin::hashes::sha256::Hash> {
+        serde_json::from_value::<PoolConfigClient>(config)?.consensus_hash()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PoolConfigGenerator;
+
+impl ExtendsCommonModuleGen for PoolConfigGenerator {
+    type Common = PoolCommonGen;
+}
+
+#[async_trait]
+impl ServerModuleGen for PoolConfigGenerator {
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[ModuleConsensusVersion(0)]
@@ -132,19 +147,17 @@ impl ModuleGen for PoolConfigGenerator {
 
     async fn distributed_gen(
         &self,
-        _connections: &MuxPeerConnections<ModuleInstanceId, DkgPeerMsg>,
-        our_id: &PeerId,
-        _instance_id: ModuleInstanceId,
-        peers: &[PeerId],
+        peers: &PeerHandle,
         params: &ConfigGenParams,
-        _task_group: &mut TaskGroup,
-    ) -> anyhow::Result<Cancellable<ServerModuleConfig>> {
+    ) -> DkgResult<ServerModuleConfig> {
         let params = params
             .get::<PoolConfigGenParams>()
             .expect("Invalid mint params");
 
         let server = PoolConfig {
-            private: PoolConfigPrivate { peer_id: *our_id },
+            private: PoolConfigPrivate {
+                peer_id: peers.our_id,
+            },
             consensus: PoolConfigConsensus {
                 epoch: EpochConfig {
                     start_epoch_at: params
@@ -153,7 +166,7 @@ impl ModuleGen for PoolConfigGenerator {
                         .unwrap_or_else(|| time::OffsetDateTime::now_utc())
                         .unix_timestamp() as _,
                     epoch_length: params.epoch_length,
-                    price_threshold: peers.threshold() as _,
+                    price_threshold: peers.peers.threshold() as _,
                     max_feerate_ppm: DEFAULT_GLOBAL_MAX_FEERATE,
                     collateral_ratio: params.collateral_ratio,
                 },
@@ -161,7 +174,7 @@ impl ModuleGen for PoolConfigGenerator {
             },
         };
 
-        Ok(Ok(server.to_erased()))
+        Ok(server.to_erased())
     }
 
     fn to_config_response(
@@ -176,20 +189,13 @@ impl ModuleGen for PoolConfigGenerator {
         })
     }
 
-    fn hash_client_module(
-        &self,
-        config: serde_json::Value,
-    ) -> anyhow::Result<bitcoin::hashes::sha256::Hash> {
-        serde_json::from_value::<PoolConfigClient>(config)?.consensus_hash()
-    }
-
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         config.to_typed::<PoolConfig>()?.validate_config(identity)
     }
 
     async fn dump_database(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
         _prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
         Box::new(BTreeMap::new().into_iter())

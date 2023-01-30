@@ -3,7 +3,8 @@ use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Mutex;
 
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::db::ModuleDatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::BitcoinHash;
 use secp256k1_zkp::Secp256k1;
@@ -249,7 +250,7 @@ impl ActionProposedDb {
 
 /// Determine whether we have at least one action that is to be proposed.
 pub async fn can_propose(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     proposal_db: &ActionProposedDb,
 ) -> bool {
     let epoch_state = epoch::EpochState::from_db(dbtx).await;
@@ -259,7 +260,7 @@ pub async fn can_propose(
 
 /// Provide consensus proposals.
 pub async fn consensus_proposal(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     proposal_db: &ActionProposedDb,
 ) -> Vec<PoolConsensusItem> {
     let state = epoch::EpochState::from_db(dbtx).await;
@@ -267,7 +268,7 @@ pub async fn consensus_proposal(
 }
 
 pub async fn process_consensus_item(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ModuleDatabaseTransaction<'_, ModuleInstanceId>,
     proposal_db: &ActionProposedDb,
     incoming_action: ActionProposed,
 ) -> ConsensusItemOutcome {

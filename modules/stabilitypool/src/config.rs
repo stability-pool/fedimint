@@ -5,7 +5,6 @@ use fedimint_core::config::{
     TypedClientModuleConfig, TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::encoding::Encodable;
-use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::PeerId;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -123,14 +122,14 @@ impl TypedServerModuleConfig for PoolConfig {
 
 impl TypedServerModuleConsensusConfig for PoolConfigConsensus {
     fn to_client_config(&self) -> fedimint_core::config::ClientModuleConfig {
-        fedimint_core::config::ClientModuleConfig::new(
+        fedimint_core::config::ClientModuleConfig::from_typed(
             KIND,
-            serde_json::to_value(&PoolConfigClient {
+            &PoolConfigClient {
                 oracle: self.oracle.clone(),
                 collateral_ratio: self.epoch.collateral_ratio,
-            })
-            .expect("serialization cannot fail"),
+            },
         )
+        .expect("serialization cannot fail")
     }
 }
 
